@@ -1,0 +1,184 @@
+/**
+ * ╔══════════════════════════════════════════════════════════╗
+ * ║   AI Agentic Wallet — Multi-Agent Demo                  ║
+ * ║   3 Independent Agents on Solana Devnet                 ║
+ * ╚══════════════════════════════════════════════════════════╝
+ *
+ * This demo shows multiple AI agents, each with:
+ *   - Their own isolated wallet (separate keypair)
+ *   - Different trading strategies
+ *   - Independent policy configurations
+ *   - Running concurrently
+ */
+
+import dotenv from 'dotenv';
+dotenv.config();
+
+import chalk from 'chalk';
+import { KeyManager, WalletService } from './wallet';
+import { PolicyEngine } from './policy';
+import {
+  AgentManager,
+  AgentRuntime,
+  TradingBotStrategy,
+  LiquidityProviderStrategy,
+  DCAStrategy,
+} from './agent';
+import { TransactionLog } from './types';
+import { formatSol, truncateKey, sleep } from './utils/helpers';
+
+const BANNER = `
+${chalk.cyan('╔══════════════════════════════════════════════════════════╗')}
+${chalk.cyan('║')}  ${chalk.bold.white('AI Agentic Wallet')} — ${chalk.yellow('Multi-Agent Demo')}                  ${chalk.cyan('║')}
+${chalk.cyan('║')}  ${chalk.gray('3 Agents × 3 Strategies × Isolated Wallets')}             ${chalk.cyan('║')}
+${chalk.cyan('╚══════════════════════════════════════════════════════════╝')}
+`;
+
+const AGENT_COLORS = [chalk.cyan, chalk.magenta, chalk.yellow];
+
+async function main() {
+  console.log(BANNER);
+
+  // ── 1. Initialize Infrastructure ──
+  console.log(chalk.bold('📦 Initializing multi-agent infrastructure...\n'));
+
+  const keyManager = new KeyManager();
+  const walletService = new WalletService(keyManager);
+  const policyEngine = new PolicyEngine(walletService);
+  const agentManager = new AgentManager(walletService, policyEngine);
+
+  // ── 2. Create 3 Agents with Different Strategies ──
+  console.log(chalk.bold('🤖 Creating agents...\n'));
+
+  const agents: AgentRuntime[] = [];
+
+  // Agent 1: Trading Bot
+  const trader = await agentManager.createAgent(
+    'AlphaTrader',
+    new TradingBotStrategy(),
+    {
+      maxTransactionLamports: 10_000_000,
+      maxHourlySpendLamports: 50_000_000,
+      txCooldownMs: 3000,
+      maxTxPerHour: 20,
+      requireSimulation: true,
+    },
+    'multi-alpha-trader'
+  );
+  agents.push(trader);
+
+  // Agent 2: Liquidity Provider
+  const lp = await agentManager.createAgent(
+    'LiquidityBot',
+    new LiquidityProviderStrategy(),
+    {
+      maxTransactionLamports: 5_000_000,
+      maxHourlySpendLamports: 30_000_000,
+      txCooldownMs: 4000,
+      maxTxPerHour: 15,
+      requireSimulation: true,
+    },
+    'multi-lp-bot'
+  );
+  agents.push(lp);
+
+  // Agent 3: DCA Bot
+  const dca = await agentManager.createAgent(
+    'DCABot',
+    new DCAStrategy(0.002),
+    {
+      maxTransactionLamports: 5_000_000,
+      maxHourlySpendLamports: 20_000_000,
+      txCooldownMs: 5000,
+      maxTxPerHour: 10,
+      requireSimulation: true,
+    },
+    'multi-dca-bot'
+  );
+  agents.push(dca);
+
+  // Print agent info
+  for (let i = 0; i < agents.length; i++) {
+    const a = agents[i];
+    const info = await walletService.getWalletInfo(a.config.id);
+    const color = AGENT_COLORS[i];
+    console.log(color(`  ${a.config.name}`));
+    console.log(color(`    Wallet: ${truncateKey(info.publicKey)}`));
+    console.log(color(`    Strategy: ${a.config.description}`));
+    console.log();
+  }
+
+  // ── 3. Fund All Agents ──
+  console.log(chalk.bold('💰 Funding agents...\n'));
+
+  for (let i = 0; i < agents.length; i++) {
+    try {
+      await walletService.requestAirdrop(agents[i].config.id, 500_000_000); // 0.5 SOL each
+      const info = await walletService.getWalletInfo(agents[i].config.id);
+      console.log(
+        AGENT_COLORS[i](
+          `  ✓ ${agents[i].config.name}: ${formatSol(info.balanceLamports)}`
+        )
+      );
+      // Small delay between airdrops to avoid rate limits
+      await sleep(2000);
+    } catch (e: any) {
+      console.log(chalk.yellow(`  ⚠ ${agents[i].config.name}: airdrop failed — ${e.message}`));
+    }
+  }
+
+  // ── 4. Setup Logging ──
+  console.log(chalk.bold('\n📊 Starting multi-agent execution...\n'));
+  console.log(chalk.gray('  ─────────────────────────────────────────\n'));
+
+  agents.forEach((agent, i) => {
+    const color = AGENT_COLORS[i];
+    agent.onLog((log: TransactionLog) => {
+      const status = log.executionResult?.success
+        ? chalk.green('✓')
+        : log.policyEvaluation.allowed
+          ? chalk.red('✗')
+          : chalk.yellow('⊘');
+
+      console.log(
+        `  ${status} ${color(`[${agent.config.name}]`)} ${log.intent.description}`
+      );
+      if (log.executionResult?.signature) {
+        console.log(chalk.gray(`    sig: ${truncateKey(log.executionResult.signature)}`));
+      }
+    });
+  });
+
+  // ── 5. Run All Agents Concurrently ──
+  const CYCLES = 6;
+  console.log(chalk.gray(`  Running ${CYCLES} cycles per agent...\n`));
+
+  await Promise.all(agents.map(agent => agent.start(CYCLES)));
+
+  // ── 6. Summary ──
+  console.log(chalk.gray('\n  ─────────────────────────────────────────\n'));
+  console.log(chalk.bold('📋 Multi-Agent Report:\n'));
+
+  for (let i = 0; i < agents.length; i++) {
+    const agent = agents[i];
+    const color = AGENT_COLORS[i];
+    const info = await walletService.getWalletInfo(agent.config.id);
+    const logs = agent.getLogs();
+    const executed = logs.filter(l => l.executionResult?.success).length;
+    const denied = logs.filter(l => !l.policyEvaluation.allowed).length;
+
+    console.log(color(`  ${agent.config.name}`));
+    console.log(`    Balance:  ${formatSol(info.balanceLamports)}`);
+    console.log(`    Executed: ${chalk.green(executed.toString())} | Denied: ${chalk.yellow(denied.toString())}`);
+    console.log(`    Cycles:   ${agent.getCycle()}`);
+    console.log();
+  }
+
+  console.log(chalk.bold('✨ Multi-agent demo complete!\n'));
+  process.exit(0);
+}
+
+main().catch(err => {
+  console.error(chalk.red(`Fatal error: ${err.message}`));
+  process.exit(1);
+});

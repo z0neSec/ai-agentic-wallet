@@ -48,7 +48,23 @@ export class WalletService {
   private keyManager: KeyManager;
 
   constructor(keyManager: KeyManager, rpcUrl?: string) {
-    this.connection = new Connection(rpcUrl || getRpcUrl(), 'confirmed');
+    const url = rpcUrl || getRpcUrl();
+    this.connection = new Connection(url, {
+      commitment: 'confirmed',
+      confirmTransactionInitialTimeout: 60000,
+      fetch: async (input, init) => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+        try {
+          return await globalThis.fetch(input, {
+            ...init,
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
+      },
+    });
     this.keyManager = keyManager;
   }
 

@@ -23,12 +23,11 @@ export class KeyManager {
   constructor(masterKeyHex?: string) {
     const key = masterKeyHex || process.env.WALLET_ENCRYPTION_KEY;
     if (!key) {
-      // For development: generate an ephemeral key (logged as warning)
-      const ephemeral = crypto.randomBytes(32).toString('hex');
-      logger.warn(
-        'No WALLET_ENCRYPTION_KEY set — using ephemeral key. Keys will be unrecoverable after restart!'
-      );
-      this.masterKey = Buffer.from(ephemeral, 'hex');
+      // Auto-generate and persist to .env so wallets survive across restarts
+      const generated = crypto.randomBytes(32).toString('hex');
+      this.masterKey = Buffer.from(generated, 'hex');
+      this.persistEncryptionKey(generated);
+      logger.info('Generated and saved WALLET_ENCRYPTION_KEY to .env');
     } else {
       this.masterKey = Buffer.from(key, 'hex');
     }
@@ -189,5 +188,33 @@ export class KeyManager {
       throw new Error(`No wallet found for agent ${agentId}`);
     }
     return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  }
+
+  /**
+   * Auto-generate and persist encryption key to .env file.
+   * Also sets it in process.env for the current run.
+   */
+  private persistEncryptionKey(keyHex: string): void {
+    process.env.WALLET_ENCRYPTION_KEY = keyHex;
+
+    const envPath = path.resolve(process.cwd(), '.env');
+    const line = `WALLET_ENCRYPTION_KEY=${keyHex}`;
+
+    try {
+      if (fs.existsSync(envPath)) {
+        let content = fs.readFileSync(envPath, 'utf-8');
+        if (content.includes('WALLET_ENCRYPTION_KEY=')) {
+          // Replace existing (even if empty)
+          content = content.replace(/WALLET_ENCRYPTION_KEY=.*/g, line);
+        } else {
+          content = content.trimEnd() + '\n' + line + '\n';
+        }
+        fs.writeFileSync(envPath, content, { mode: 0o600 });
+      } else {
+        fs.writeFileSync(envPath, line + '\n', { mode: 0o600 });
+      }
+    } catch (err: any) {
+      logger.warn(`Could not persist encryption key to .env: ${err.message}`);
+    }
   }
 }

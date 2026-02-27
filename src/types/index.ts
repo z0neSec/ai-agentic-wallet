@@ -43,6 +43,8 @@ export interface AgentPolicy {
   allowSolTransfers: boolean;
   /** Whether to allow SPL token transfers */
   allowSplTransfers: boolean;
+  /** Minimum confidence threshold (0.0-1.0) — trades below this are rejected */
+  minConfidence?: number;
 }
 
 /** Transaction intent — what the agent wants to do */
@@ -170,4 +172,25 @@ export interface EncryptedWalletData {
   iv: string;
   authTag: string;
   createdAt: number;
+}
+
+/** Agent performance metrics */
+export interface AgentPerformance {
+  agentId: AgentId;
+  startBalance: number;
+  endBalance: number;
+  totalExecuted: number;
+  totalDenied: number;
+  totalFailed: number;
+  totalFeesPaid: number;
+  pnlLamports: number;
+  winRate: number;
+  signatures: string[];
+}
+
+/** Agent-to-agent transfer intent */
+export interface AgentTransferParams {
+  type: 'AGENT_TRANSFER';
+  targetAgentId: AgentId;
+  lamports: number;
 }

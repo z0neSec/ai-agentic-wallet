@@ -52,13 +52,15 @@ The PolicyEngine is the **primary defense against autonomous agent misbehavior**
 
 **Checks performed (in order):**
 
-1. **Type Permissions** — SOL transfers, SPL transfers can be independently enabled/disabled
-2. **Per-Transaction Spending Limit** — Maximum lamports per single transaction
-3. **Hourly Spending Limit** — Cumulative cap on total spend within a rolling hour
-4. **Cooldown Enforcement** — Minimum milliseconds between consecutive transactions
-5. **Rate Limit** — Maximum transactions per hour
-6. **Program Allowlist** — Only approved Solana program IDs can be called
-7. **Transaction Simulation** — Every transaction is simulated via `simulateTransaction` before broadcast
+0. **Emergency Kill Switch** — If active, ALL transactions are immediately rejected
+1. **Confidence Threshold** — Rejects intents below the configured minimum confidence
+2. **Type Permissions** — SOL transfers, SPL transfers can be independently enabled/disabled
+3. **Per-Transaction Spending Limit** — Maximum lamports per single transaction
+4. **Hourly Spending Limit** — Cumulative cap on total spend within a rolling hour
+5. **Cooldown Enforcement** — Minimum milliseconds between consecutive transactions
+6. **Rate Limit** — Maximum transactions per hour
+7. **Program Allowlist** — Only approved Solana program IDs can be called
+8. **Transaction Simulation** — Every transaction is simulated via `simulateTransaction` before broadcast
 
 ```typescript
 const policy: AgentPolicy = {
@@ -69,8 +71,10 @@ const policy: AgentPolicy = {
   allowlistedPrograms: [                  // Only these programs
     '11111111111111111111111111111111',    // System Program
     'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', // Token Program
+    'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr', // Memo Program v2
   ],
   requireSimulation: true,                // Always simulate first
+  minConfidence: 0.6,                     // Reject trades with <60% confidence
   allowSolTransfers: true,
   allowSplTransfers: true,
 };
@@ -80,6 +84,8 @@ const policy: AgentPolicy = {
 
 | Check | Prevents |
 |-------|---------|
+| Kill switch | Anomalous behavior — instant global halt |
+| Confidence threshold | Low-quality / uncertain agent decisions |
 | Spending limit (per-tx) | Single large unauthorized transfer |
 | Spending limit (hourly) | Slow-drip fund drainage |
 | Cooldown | Transaction spam / infinite loops |
@@ -138,7 +144,13 @@ This prevents path traversal attacks like `../../etc/passwd` as an agent ID.
 | AES-256-GCM encryption | **Real** — actual encrypted files on disk |
 | Devnet transactions | **Real** — actual on-chain transactions with signatures |
 | SOL transfers | **Real** — real SOL moves between devnet accounts |
+| On-chain memos | **Real** — agent reasoning written permanently via Memo Program v2 |
+| Agent-to-agent transfers | **Real** — actual SOL moved between agent wallets on-chain |
 | Policy engine | **Real** — actual enforcement with all checks |
+| Kill switch | **Real** — immediately blocks all policy approvals |
+| Confidence threshold | **Real** — rejects intents below configured confidence |
+| Performance tracking | **Real** — actual P&L, fees, win rate from on-chain data |
+| Transaction history | **Real** — persisted to JSON for audit |
 | Market sentiment | **Simulated** — random walk for demo purposes |
 | Trade targets | **Simulated** — random addresses (no real DEX integration) |
 
@@ -173,7 +185,7 @@ For moving beyond devnet, these additional measures would be needed:
 
 ## Test Coverage
 
-Security properties are validated by 29 automated tests:
+Security properties are validated by 34 automated tests:
 
 - **Key encryption/decryption** — Verify round-trip correctness
 - **No plaintext leakage** — Verify encrypted files don't contain raw keys
@@ -183,6 +195,11 @@ Security properties are validated by 29 automated tests:
 - **Program allowlist** — Verify unapproved programs are rejected
 - **Agent isolation** — Verify one agent's history doesn't affect another
 - **Wallet destruction** — Verify secure overwrite and deletion
+- **Emergency kill switch** — Verify all transactions blocked when active
+- **Kill switch resume** — Verify normal operation resumes after deactivation
+- **Confidence threshold** — Verify low-confidence trades are rejected
+- **Confidence passthrough** — Verify high-confidence trades are approved
+- **No threshold fallback** — Verify any confidence allowed when not configured
 
 ---
 

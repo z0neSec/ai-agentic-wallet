@@ -19,19 +19,49 @@ import { logger, agentLogger } from '../utils/logger';
  * malicious or runaway agent behavior.
  *
  * Checks performed:
- * 1. Spending limits (per-tx and hourly)
- * 2. Rate limits (cooldown and tx/hour)
- * 3. Program allowlist
- * 4. Transaction type permissions
- * 5. Transaction simulation (optional but recommended)
+ * 1. Emergency kill switch (global halt)
+ * 2. Confidence threshold
+ * 3. Spending limits (per-tx and hourly)
+ * 4. Rate limits (cooldown and tx/hour)
+ * 5. Program allowlist
+ * 6. Transaction type permissions
+ * 7. Transaction simulation (optional but recommended)
  */
 export class PolicyEngine {
   private walletService: WalletService;
   private txHistory: Map<AgentId, { timestamp: number; lamports: number }[]> = new Map();
   private lastTxTime: Map<AgentId, number> = new Map();
+  private killed: boolean = false;
+  private killReason: string = '';
 
   constructor(walletService: WalletService) {
     this.walletService = walletService;
+  }
+
+  /**
+   * EMERGENCY KILL SWITCH — Immediately halts ALL agents.
+   * No transactions can be approved until resume() is called.
+   */
+  kill(reason: string = 'Emergency kill switch activated'): void {
+    this.killed = true;
+    this.killReason = reason;
+    logger.error(`🚨 KILL SWITCH ACTIVATED: ${reason}`);
+  }
+
+  /**
+   * Resume normal operation after a kill switch.
+   */
+  resume(): void {
+    this.killed = false;
+    this.killReason = '';
+    logger.info('Kill switch deactivated — normal operation resumed');
+  }
+
+  /**
+   * Check if the kill switch is active.
+   */
+  isKilled(): boolean {
+    return this.killed;
   }
 
   /**
@@ -45,16 +75,30 @@ export class PolicyEngine {
     const log = agentLogger(intent.agentId);
     const violations: string[] = [];
 
-    // 1. Check transaction type permissions
+    // 0. Kill switch — reject everything immediately
+    if (this.killed) {
+      const evaluation: PolicyEvaluation = {
+        allowed: false,
+        reason: `EMERGENCY HALT: ${this.killReason}`,
+        violations: [`Kill switch active: ${this.killReason}`],
+      };
+      log.error(`Policy EMERGENCY HALT: ${intent.description}`);
+      return evaluation;
+    }
+
+    // 1. Confidence threshold
+    this.checkConfidence(intent, policy, violations);
+
+    // 2. Check transaction type permissions
     this.checkTypePermissions(intent, policy, violations);
 
-    // 2. Check spending limits
+    // 3. Check spending limits
     this.checkSpendingLimits(intent, policy, violations);
 
-    // 3. Check rate limits
+    // 4. Check rate limits
     this.checkRateLimits(intent, policy, violations);
 
-    // 4. Check program allowlist
+    // 5. Check program allowlist
     this.checkProgramAllowlist(intent, policy, violations);
 
     // 5. If no violations so far and simulation required, simulate
@@ -123,6 +167,19 @@ export class PolicyEngine {
     }
     if (intent.type === TransactionType.TRANSFER_SPL && !policy.allowSplTransfers) {
       violations.push('SPL token transfers are not allowed by policy');
+    }
+  }
+
+  private checkConfidence(
+    intent: TransactionIntent,
+    policy: AgentPolicy,
+    violations: string[]
+  ): void {
+    const minConfidence = policy.minConfidence ?? 0;
+    if (intent.confidence < minConfidence) {
+      violations.push(
+        `Confidence ${(intent.confidence * 100).toFixed(0)}% below threshold ${(minConfidence * 100).toFixed(0)}%`
+      );
     }
   }
 

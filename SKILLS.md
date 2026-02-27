@@ -41,6 +41,19 @@
 | `set_cooldown` | Min wait between transactions (ms) | `txCooldownMs: number` |
 | `set_program_allowlist` | Restrict to specific program IDs | `allowlistedPrograms: string[]` |
 | `require_simulation` | Simulate before every broadcast | `requireSimulation: boolean` |
+| `set_confidence_threshold` | Reject trades below confidence level | `minConfidence: number (0.0-1.0)` |
+| `kill_switch` | Emergency halt — block all transactions | `reason: string` |
+| `resume` | Deactivate kill switch | — |
+
+### Advanced Features
+
+| Skill | Description | Input | Output |
+|-------|------------|-------|--------|
+| `agent_to_agent_transfer` | Transfer SOL between agent wallets | `fromAgent, toAgent, lamports` | `ExecutionResult` |
+| `get_performance` | Get agent P&L, win rate, fees | `agent_id` | `AgentPerformance` |
+| `get_explorer_links` | Solana Explorer links for all txs | `agent_id` | `string[]` |
+| `persist_history` | Save audit trail to JSON file | `agent_id` | `filePath: string` |
+| `on_chain_memo` | Agent reasoning written to Solana | Automatic with every tx | Memo Program v2 |
 
 ### Agent Strategies (Pluggable)
 
@@ -66,11 +79,11 @@
 ### Transaction Flow
 
 ```
-Agent Decision → Policy Engine → Simulation → Signing → Broadcast → Confirmation
-     ↓              ↓               ↓           ↓          ↓            ↓
-  Strategy      Validate        Dry run      AES key    Solana RPC    On-chain
-  decides       limits &        before       loaded &   sends tx      confirmed
-  action        allowlists      sending      released
+Agent Decision → Kill Switch Check → Confidence Check → Policy Engine → Simulation → Signing → Memo Attach → Broadcast → Confirmation
+     ↓                ↓                    ↓                ↓             ↓           ↓           ↓             ↓            ↓
+  Strategy        Global halt         Threshold          Validate     Dry run      AES key     On-chain      Solana RPC   On-chain
+  decides         if active           filter             limits &     before       loaded &    reasoning     sends tx     confirmed
+  action                                                 allowlists   sending      released    via Memo
 ```
 
 ### Error Handling
@@ -110,6 +123,16 @@ await agent.start(cycles);
 // Query state
 const info = await walletService.getWalletInfo(agentId);
 const logs = agent.getLogs();
+const perf = await agent.getPerformance();
+const links = agent.getExplorerLinks();
+agent.persistHistory();
+
+// Agent-to-agent transfer
+await walletService.agentToAgentTransfer(fromAgent, toAgent, lamports, 'memo');
+
+// Emergency controls
+policyEngine.kill('anomaly detected');
+policyEngine.resume();
 ```
 
 ---

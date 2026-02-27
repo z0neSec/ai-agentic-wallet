@@ -176,4 +176,63 @@ describe('PolicyEngine', () => {
     expect(policyEngine.getHourlySpend('agent-B')).toBe(0);
     expect(policyEngine.getRecentTxCount('agent-B')).toBe(0);
   });
+
+  // ── Emergency Kill Switch Tests ──
+
+  test('should deny all transactions when kill switch is active', async () => {
+    policyEngine.kill('Test emergency');
+    expect(policyEngine.isKilled()).toBe(true);
+
+    const intent = makeIntent(1_000, 'kill-agent');
+    const result = await policyEngine.evaluate(intent, policy);
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain('EMERGENCY HALT');
+    expect(result.violations[0]).toContain('Kill switch');
+  });
+
+  test('should resume after kill switch is deactivated', async () => {
+    policyEngine.kill('Test emergency');
+    expect(policyEngine.isKilled()).toBe(true);
+
+    policyEngine.resume();
+    expect(policyEngine.isKilled()).toBe(false);
+
+    const intent = makeIntent(1_000, 'resume-agent');
+    const result = await policyEngine.evaluate(intent, policy);
+    expect(result.allowed).toBe(true);
+  });
+
+  // ── Confidence Threshold Tests ──
+
+  test('should deny transaction below confidence threshold', async () => {
+    policy.minConfidence = 0.7;
+    const intent: TransactionIntent = {
+      ...makeIntent(1_000, 'conf-agent'),
+      confidence: 0.5, // Below 0.7 threshold
+    };
+    const result = await policyEngine.evaluate(intent, policy);
+    expect(result.allowed).toBe(false);
+    expect(result.violations[0]).toContain('Confidence');
+    expect(result.violations[0]).toContain('below threshold');
+  });
+
+  test('should approve transaction meeting confidence threshold', async () => {
+    policy.minConfidence = 0.6;
+    const intent: TransactionIntent = {
+      ...makeIntent(1_000, 'conf-pass-agent'),
+      confidence: 0.8, // Above 0.6 threshold
+    };
+    const result = await policyEngine.evaluate(intent, policy);
+    expect(result.allowed).toBe(true);
+  });
+
+  test('should allow any confidence when threshold not set', async () => {
+    delete policy.minConfidence;
+    const intent: TransactionIntent = {
+      ...makeIntent(1_000, 'no-conf-agent'),
+      confidence: 0.1, // Very low but no threshold set
+    };
+    const result = await policyEngine.evaluate(intent, policy);
+    expect(result.allowed).toBe(true);
+  });
 });

@@ -124,6 +124,8 @@ Storing raw private keys in environment variables is common but dangerous:
     ▼
  3. AgentRuntime passes intent to PolicyEngine.evaluate(intent, policy)
     │
+    ├── Check: Kill switch active? (immediate reject if yes)
+    ├── Check: Confidence ≥ minConfidence threshold?
     ├── Check: Type permission (SOL/SPL allowed?)
     ├── Check: Amount ≤ per-tx limit?
     ├── Check: Hourly spend + amount ≤ hourly limit?
@@ -133,17 +135,22 @@ Storing raw private keys in environment variables is common but dangerous:
     └── Check: Simulation passes?
     │
     ▼
- 4. If ALL checks pass → WalletService.executeTransaction(agentId, intent)
+ 4. If ALL checks pass → WalletService.executeTransaction(agentId, intent, memo)
     │
-    ├── KeyManager.loadKey(agentId)     ← Decrypt key into memory
-    ├── Build Solana Transaction        ← Construct instructions
-    ├── sendAndConfirmTransaction()     ← Sign + broadcast
-    ├── KeyManager.releaseKey(agentId)  ← Clear key from memory
+    ├── KeyManager.loadKey(agentId)       ← Decrypt key into memory
+    ├── Build Solana Transaction          ← Construct instructions
+    ├── Attach Memo instruction           ← Agent reasoning → Memo Program v2
+    ├── sendAndConfirmTransaction()       ← Sign + broadcast
+    ├── KeyManager.releaseKey(agentId)    ← Clear key from memory
     └── Return ExecutionResult
     │
     ▼
  5. TransactionLog recorded with full context:
     { intent, policyEvaluation, executionResult, timestamp }
+    │
+    ▼
+ 6. Performance tracked: P&L, fees, win rate, Solana Explorer links
+    History optionally persisted to ./history/{agentId}-history.json
 ```
 
 ---
@@ -227,8 +234,11 @@ Encrypted wallet file format:
 | DEX integration | Replace `buildSimulatedSwap` in WalletService |
 | On-chain policy | Deploy a Solana program, add PDA vault layer |
 | External AI | Strategy calls an LLM API for decisions |
-| Web dashboard | Read TransactionLogs from AgentRuntime |
+| Web dashboard | Read persisted history JSON from `./history/` |
 | Multi-chain | Abstract WalletService behind a chain interface |
+| Custom memos | Pass custom memo strings to `executeTransaction()` |
+| Agent economy | Use `agentToAgentTransfer()` for inter-agent cooperation |
+| Anomaly detection | Trigger `kill()` from an ML monitoring pipeline |
 
 ---
 

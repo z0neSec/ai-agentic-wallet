@@ -11,3 +11,4 @@ export type {
   AgentStrategy,
 } from './agent';
 export * from './types';
+export { formatSol, lamportsToSol, truncateKey, sleep, getRpcUrl } from './utils/helpers';

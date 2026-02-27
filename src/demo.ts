@@ -83,6 +83,7 @@ async function main() {
       txCooldownMs: 3000,
       maxTxPerHour: 30,
       requireSimulation: true,
+      minConfidence: 0.6, // Reject trades with <60% confidence
     },
     DEMO_AGENT_ID // persistent ID
   );
@@ -149,27 +150,39 @@ async function main() {
   // ── 5. Run Agent ──
   await agent.start(8); // Run 8 cycles
 
-  // ── 6. Summary ──
+  // ── 6. Performance Report ──
   console.log(chalk.gray('\n  ─────────────────────────────────────────\n'));
-  console.log(chalk.bold('📋 Agent Report:\n'));
+  console.log(chalk.bold('📋 Agent Performance Report:\n'));
 
+  const perf = await agent.getPerformance();
   const finalInfo = await walletService.getWalletInfo(agent.config.id);
-  const logs = agent.getLogs();
-  const executed = logs.filter(l => l.executionResult?.success).length;
-  const denied = logs.filter(l => !l.policyEvaluation.allowed).length;
-  const failed = logs.filter(
-    l => l.policyEvaluation.allowed && !l.executionResult?.success
-  ).length;
 
-  console.log(`  Agent:      ${agent.config.name}`);
-  console.log(`  Cycles:     ${agent.getCycle()}`);
-  console.log(`  Balance:    ${formatSol(finalInfo.balanceLamports)}`);
-  console.log(`  Executed:   ${chalk.green(executed.toString())}`);
-  console.log(`  Denied:     ${chalk.yellow(denied.toString())}`);
-  console.log(`  Failed:     ${chalk.red(failed.toString())}`);
-  console.log(
-    `  Status:     ${agent.config.status}`
-  );
+  console.log(`  Agent:        ${agent.config.name}`);
+  console.log(`  Cycles:       ${agent.getCycle()}`);
+  console.log(`  Start Balance: ${formatSol(perf.startBalance)}`);
+  console.log(`  End Balance:   ${formatSol(perf.endBalance)}`);
+  const pnlColor = perf.pnlLamports >= 0 ? chalk.green : chalk.red;
+  console.log(`  P&L:          ${pnlColor(formatSol(perf.pnlLamports))}`);
+  console.log(`  Fees Paid:    ${formatSol(perf.totalFeesPaid)}`);
+  console.log(`  Win Rate:     ${(perf.winRate * 100).toFixed(0)}%`);
+  console.log(`  Executed:     ${chalk.green(perf.totalExecuted.toString())}`);
+  console.log(`  Denied:       ${chalk.yellow(perf.totalDenied.toString())}`);
+  console.log(`  Failed:       ${chalk.red(perf.totalFailed.toString())}`);
+  console.log(`  Status:       ${agent.config.status}`);
+
+  // ── 7. Solana Explorer Links ──
+  const links = agent.getExplorerLinks();
+  if (links.length > 0) {
+    console.log(chalk.bold('\n🔗 On-Chain Proof (Solana Explorer):\n'));
+    links.forEach((link, i) => {
+      console.log(chalk.gray(`  ${i + 1}. ${link}`));
+    });
+    console.log(chalk.gray('\n  Each transaction includes an on-chain memo with agent reasoning.'));
+  }
+
+  // ── 8. Persist History ──
+  const historyFile = agent.persistHistory();
+  console.log(chalk.gray(`\n  📁 Transaction history saved: ${historyFile}`));
 
   console.log(chalk.bold('\n✨ Demo complete!\n'));
   process.exit(0);

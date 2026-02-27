@@ -26,6 +26,7 @@ import {
 } from './agent';
 import { TransactionLog } from './types';
 import { formatSol, truncateKey, sleep } from './utils/helpers';
+import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 
 const BANNER = `
 ${chalk.cyan('╔══════════════════════════════════════════════════════════╗')}
@@ -62,6 +63,7 @@ async function main() {
       txCooldownMs: 3000,
       maxTxPerHour: 20,
       requireSimulation: true,
+      minConfidence: 0.6,
     },
     'multi-alpha-trader'
   );
@@ -77,6 +79,7 @@ async function main() {
       txCooldownMs: 4000,
       maxTxPerHour: 15,
       requireSimulation: true,
+      minConfidence: 0.5,
     },
     'multi-lp-bot'
   );
@@ -92,6 +95,7 @@ async function main() {
       txCooldownMs: 5000,
       maxTxPerHour: 10,
       requireSimulation: true,
+      minConfidence: 0.5,
     },
     'multi-dca-bot'
   );
@@ -155,22 +159,63 @@ async function main() {
 
   await Promise.all(agents.map(agent => agent.start(CYCLES)));
 
-  // ── 6. Summary ──
-  console.log(chalk.gray('\n  ─────────────────────────────────────────\n'));
-  console.log(chalk.bold('📋 Multi-Agent Report:\n'));
+  // ── 6. Agent-to-Agent Transfer ──
+  console.log(chalk.bold('\n🔄 Agent-to-Agent Transfer Demo:\n'));
+  console.log(chalk.gray('  AlphaTrader sending 0.001 SOL to DCABot...\n'));
+
+  try {
+    const transferResult = await walletService.agentToAgentTransfer(
+      'multi-alpha-trader',
+      'multi-dca-bot',
+      1_000_000, // 0.001 SOL
+      '[AgentEconomy] AlphaTrader funding DCABot for next cycle'
+    );
+
+    if (transferResult.success) {
+      console.log(chalk.green(`  ✓ Agent-to-agent transfer confirmed: ${transferResult.signature?.slice(0, 12)}...`));
+      console.log(chalk.gray(`    Explorer: https://explorer.solana.com/tx/${transferResult.signature}?cluster=devnet`));
+    } else {
+      console.log(chalk.yellow(`  ⚠ Transfer failed: ${transferResult.error}`));
+    }
+  } catch (e: any) {
+    console.log(chalk.yellow(`  ⚠ Transfer skipped: ${e.message}`));
+  }
+
+  // ── 7. Emergency Kill Switch Demo ──
+  console.log(chalk.bold('\n🚨 Emergency Kill Switch Demo:\n'));
+  console.log(chalk.gray('  Activating kill switch...'));
+  policyEngine.kill('Simulated anomaly detected — halting all agents');
+  console.log(chalk.red('  ✗ Kill switch ACTIVE — all future transactions blocked'));
+  console.log(chalk.gray('  Resuming normal operation...'));
+  policyEngine.resume();
+  console.log(chalk.green('  ✓ Kill switch deactivated — normal operation resumed\n'));
+
+  // ── 8. Performance Summary ──
+  console.log(chalk.gray('  ─────────────────────────────────────────\n'));
+  console.log(chalk.bold('📋 Multi-Agent Performance Report:\n'));
 
   for (let i = 0; i < agents.length; i++) {
     const agent = agents[i];
     const color = AGENT_COLORS[i];
-    const info = await walletService.getWalletInfo(agent.config.id);
-    const logs = agent.getLogs();
-    const executed = logs.filter(l => l.executionResult?.success).length;
-    const denied = logs.filter(l => !l.policyEvaluation.allowed).length;
+    const perf = await agent.getPerformance();
 
     console.log(color(`  ${agent.config.name}`));
-    console.log(`    Balance:  ${formatSol(info.balanceLamports)}`);
-    console.log(`    Executed: ${chalk.green(executed.toString())} | Denied: ${chalk.yellow(denied.toString())}`);
-    console.log(`    Cycles:   ${agent.getCycle()}`);
+    console.log(`    Balance:  ${formatSol(perf.endBalance)}`);
+    console.log(`    P&L:      ${perf.pnlLamports >= 0 ? chalk.green(formatSol(perf.pnlLamports)) : chalk.red(formatSol(perf.pnlLamports))}`);
+    console.log(`    Fees:     ${formatSol(perf.totalFeesPaid)}`);
+    console.log(`    Win Rate: ${(perf.winRate * 100).toFixed(0)}%`);
+    console.log(`    Executed: ${chalk.green(perf.totalExecuted.toString())} | Denied: ${chalk.yellow(perf.totalDenied.toString())} | Failed: ${chalk.red(perf.totalFailed.toString())}`);
+
+    // Explorer links
+    const links = agent.getExplorerLinks();
+    if (links.length > 0) {
+      console.log(`    On-chain proof: ${links.length} transactions`);
+      console.log(chalk.gray(`    ${links[0]}`));
+    }
+
+    // Persist history
+    const historyFile = agent.persistHistory();
+    console.log(chalk.gray(`    History: ${historyFile}`));
     console.log();
   }
 

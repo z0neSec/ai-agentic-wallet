@@ -4,7 +4,7 @@
 
 [![Solana](https://img.shields.io/badge/Solana-Devnet-blue)](https://solana.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org)
-[![Tests](https://img.shields.io/badge/Tests-29%20passing-green)](./src/__tests__)
+[![Tests](https://img.shields.io/badge/Tests-34%20passing-green)](./src/__tests__)
 [![License](https://img.shields.io/badge/License-MIT-green)](./LICENSE)
 
 ---
@@ -19,11 +19,15 @@ Unlike traditional wallets that require human approval for every transaction, ag
 
 - **Autonomous Wallet Creation** — Agents programmatically generate and control their own keypairs
 - **AES-256-GCM Encrypted Key Storage** — Private keys never exist in plaintext on disk
-- **Policy Engine** — Spending limits, rate limits, program allowlists, and mandatory transaction simulation
+- **Policy Engine** — Spending limits, rate limits, confidence thresholds, program allowlists, and mandatory transaction simulation
+- **On-Chain Audit Trail** — Agent reasoning written to Solana via Memo Program v2 — verifiable on-chain
+- **Agent-to-Agent Transfers** — Agents send funds to each other, creating an on-chain agent economy
+- **Emergency Kill Switch** — Global halt that instantly blocks all agent transactions
 - **Multi-Agent Isolation** — Each agent gets its own wallet, policy config, and audit trail
 - **Pluggable Strategies** — TradingBot, LiquidityProvider, DCA — or write your own
-- **Full Audit Logging** — Every decision, policy check, and execution is logged
-- **Devnet Working Prototype** — Fully functional on Solana devnet
+- **Performance Tracking** — P&L, win rate, fees, Solana Explorer links per agent
+- **Transaction History Persistence** — Audit trail saved to JSON, survives restarts
+- **Devnet Working Prototype** — Fully functional on Solana devnet with real on-chain transactions
 
 ---
 
@@ -160,12 +164,19 @@ When you run `npm run demo`, you'll see:
    - Queries its balance
    - Analyzes simulated market sentiment
    - Decides whether to trade, how much, and with what confidence
-   - Submits the decision to the Policy Engine
-   - If approved, the transaction is simulated, signed, and broadcast
-   - If denied, the reason is logged
-4. **Audit Report** — Summary of all actions, denials, and final balance
+   - Submits the decision to the Policy Engine (including confidence threshold check)
+   - If approved, the transaction is simulated, signed, broadcast, **and annotated with an on-chain memo**
+   - If denied (spending limit, rate limit, or low confidence), the reason is logged
+4. **Performance Report** — P&L, win rate, total fees, Solana Explorer links
+5. **History Persistence** — Full audit trail saved to `history/{agent-id}-history.json`
 
-Each transaction is a **real on-chain devnet transaction** with a verifiable signature.
+Each transaction is a **real on-chain devnet transaction** with:
+- A verifiable signature on Solana Explorer
+- An **on-chain memo** containing the agent's reasoning (via Memo Program v2)
+
+The multi-agent demo (`npm run demo:multi`) additionally shows:
+- **Agent-to-agent transfers** — one agent sends funds to another
+- **Emergency kill switch** — demonstrates global halt and resume
 
 ---
 
@@ -177,12 +188,15 @@ See [SECURITY.md](./SECURITY.md) for the complete security analysis.
 
 | Layer | Protection | Details |
 |-------|-----------|---------|
+| Kill Switch | Emergency halt | Global pause that blocks all agents instantly |
+| Confidence | Threshold filter | Reject trades below configurable confidence level |
 | Key Storage | AES-256-GCM encryption | Keys encrypted at rest, loaded only for signing |
 | Per-Transaction | Spending limit | Configurable max lamports per transaction |
 | Hourly | Spending limit | Caps total hourly expenditure |
 | Rate | Cooldown + max/hour | Prevents rapid-fire transactions |
 | Programs | Allowlist | Only approved program IDs can be called |
 | Pre-flight | Simulation | Every transaction simulated before broadcast |
+| On-Chain Audit | Memo Program | Agent reasoning written to Solana permanently |
 | Type | Permission flags | SOL/SPL transfers can be independently toggled |
 | Filesystem | File permissions | Wallet files created with mode 0o600 |
 | Path | Traversal protection | Agent IDs sanitized before filesystem use |
@@ -196,31 +210,32 @@ See [SECURITY.md](./SECURITY.md) for the complete security analysis.
 ai-agentic-wallet/
 ├── src/
 │   ├── agent/                  # AI agent logic
-│   │   ├── agent-runtime.ts    # Autonomous execution loop + multi-agent manager
+│   │   ├── agent-runtime.ts    # Autonomous loop + multi-agent manager + performance tracking
 │   │   ├── strategies.ts       # Pluggable trading strategies
 │   │   └── index.ts
 │   ├── wallet/                 # Wallet infrastructure
 │   │   ├── key-manager.ts      # Encrypted key generation & storage
-│   │   ├── wallet-service.ts   # Signing, execution, simulation
+│   │   ├── wallet-service.ts   # Signing, execution, simulation, Memo Program, agent transfers
 │   │   └── index.ts
 │   ├── policy/                 # Security policy engine
-│   │   ├── policy-engine.ts    # Spending limits, rate limits, allowlists
+│   │   ├── policy-engine.ts    # Kill switch, confidence, spending/rate limits, allowlists
 │   │   └── index.ts
 │   ├── types/                  # TypeScript type definitions
 │   │   └── index.ts
 │   ├── utils/                  # Shared utilities
 │   │   ├── helpers.ts
 │   │   └── logger.ts
-│   ├── __tests__/              # Test suite (29 tests)
+│   ├── __tests__/              # Test suite (34 tests)
 │   │   ├── key-manager.test.ts
 │   │   ├── policy-engine.test.ts
 │   │   └── strategies.test.ts
 │   ├── demo.ts                 # Single agent demo
-│   ├── demo-multi-agent.ts     # Multi-agent demo
+│   ├── demo-multi-agent.ts     # Multi-agent demo with agent transfers + kill switch
 │   ├── cli.ts                  # CLI interface
 │   └── index.ts                # Library exports
 ├── scripts/
 │   └── setup-devnet.ts         # Devnet initialization
+├── history/                    # Persisted transaction audit trails (git-ignored)
 ├── ARCHITECTURE.md             # Architecture deep dive
 ├── SECURITY.md                 # Security deep dive
 ├── SKILLS.md                   # Agent skills manifest

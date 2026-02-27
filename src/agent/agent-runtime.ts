@@ -6,13 +6,16 @@ import {
   TransactionLog,
   ExecutionResult,
   PolicyEvaluation,
+  AgentPerformance,
 } from '../types';
 import { WalletService } from '../wallet/wallet-service';
 import { PolicyEngine } from '../policy/policy-engine';
 import { AgentStrategy } from './strategies';
 import { logger, agentLogger } from '../utils/logger';
-import { defaultPolicy, sleep } from '../utils/helpers';
+import { defaultPolicy, sleep, formatSol } from '../utils/helpers';
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * AgentRuntime — The autonomous execution loop for a single agent.
@@ -37,6 +40,7 @@ export class AgentRuntime {
   private cycle: number = 0;
   private transactionLog: TransactionLog[] = [];
   private onLogCallback?: (log: TransactionLog) => void;
+  private startBalance: number = 0;
 
   constructor(
     config: AgentConfig,
@@ -64,6 +68,14 @@ export class AgentRuntime {
     this.running = true;
     this.config.status = AgentStatus.ACTIVE;
     log.info(`Agent started with strategy: ${this.strategy.name}`);
+
+    // Capture start balance for performance tracking
+    try {
+      const info = await this.walletService.getWalletInfo(this.config.id);
+      this.startBalance = info.balanceLamports;
+    } catch {
+      this.startBalance = 0;
+    }
 
     try {
       while (this.running && (maxCycles === undefined || this.cycle < maxCycles)) {
@@ -120,6 +132,72 @@ export class AgentRuntime {
     return this.running;
   }
 
+  /**
+   * Get performance metrics for this agent.
+   */
+  async getPerformance(): Promise<AgentPerformance> {
+    let endBalance = 0;
+    try {
+      const info = await this.walletService.getWalletInfo(this.config.id);
+      endBalance = info.balanceLamports;
+    } catch { /* wallet may not exist */ }
+
+    const executed = this.transactionLog.filter(l => l.executionResult?.success);
+    const denied = this.transactionLog.filter(l => !l.policyEvaluation.allowed);
+    const failed = this.transactionLog.filter(
+      l => l.policyEvaluation.allowed && !l.executionResult?.success
+    );
+    const totalFees = executed.reduce((sum, l) => sum + (l.executionResult?.fee || 0), 0);
+    const signatures = executed
+      .map(l => l.executionResult?.signature)
+      .filter((s): s is string => !!s);
+
+    return {
+      agentId: this.config.id,
+      startBalance: this.startBalance,
+      endBalance,
+      totalExecuted: executed.length,
+      totalDenied: denied.length,
+      totalFailed: failed.length,
+      totalFeesPaid: totalFees,
+      pnlLamports: endBalance - this.startBalance,
+      winRate: this.transactionLog.length > 0
+        ? executed.length / this.transactionLog.length
+        : 0,
+      signatures,
+    };
+  }
+
+  /**
+   * Generate Solana Explorer links for all executed transactions.
+   */
+  getExplorerLinks(): string[] {
+    return this.transactionLog
+      .filter(l => l.executionResult?.signature)
+      .map(l => `https://explorer.solana.com/tx/${l.executionResult!.signature}?cluster=devnet`);
+  }
+
+  /**
+   * Persist transaction history to a JSON file for audit.
+   */
+  persistHistory(): string {
+    const historyDir = path.resolve(process.cwd(), 'history');
+    if (!fs.existsSync(historyDir)) {
+      fs.mkdirSync(historyDir, { recursive: true });
+    }
+    const filePath = path.join(historyDir, `${this.config.id}-history.json`);
+    const data = {
+      agentId: this.config.id,
+      agentName: this.config.name,
+      strategy: this.strategy.name,
+      exportedAt: new Date().toISOString(),
+      totalCycles: this.cycle,
+      transactions: this.transactionLog,
+    };
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    return filePath;
+  }
+
   // ─── Private Methods ──────────────────────────────────────
 
   private async runCycle(): Promise<void> {
@@ -153,9 +231,12 @@ export class AgentRuntime {
       // 4. Execute or deny
       let executionResult: ExecutionResult | undefined;
       if (evaluation.allowed) {
+        // Pass agent reasoning as on-chain memo for auditability
+        const memo = `[${this.config.name}] ${decision.reasoning}`;
         executionResult = await this.walletService.executeTransaction(
           this.config.id,
-          decision.intent
+          decision.intent,
+          memo
         );
       }
 

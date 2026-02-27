@@ -31,6 +31,9 @@ import {
 import { logger, agentLogger } from '../utils/logger';
 import { getRpcUrl, formatSol } from '../utils/helpers';
 
+/** Solana Memo Program v2 */
+const MEMO_PROGRAM_ID = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+
 /**
  * WalletService — The signing and execution layer.
  *
@@ -142,10 +145,12 @@ export class WalletService {
 
   /**
    * Execute a transaction on-chain.
+   * Optionally attaches an on-chain memo (via Memo Program) for auditability.
    */
   async executeTransaction(
     agentId: AgentId,
-    intent: TransactionIntent
+    intent: TransactionIntent,
+    memo?: string
   ): Promise<ExecutionResult> {
     const log = agentLogger(agentId);
     log.info(`Executing: ${intent.description}`);
@@ -153,6 +158,10 @@ export class WalletService {
     try {
       const keypair = await this.keyManager.loadKey(agentId);
       const tx = await this.buildTransaction(keypair, intent);
+
+      // Attach on-chain memo with agent reasoning (Memo Program v2)
+      const memoText = memo || `[AI-Agent:${agentId}] ${intent.description}`;
+      tx.add(this.buildMemoInstruction(memoText, keypair.publicKey));
 
       const signature = await sendAndConfirmTransaction(
         this.connection,
@@ -207,6 +216,35 @@ export class WalletService {
 
     logger.info(`Airdrop of ${formatSol(lamports)} to agent ${agentId}`, { agentId });
     return signature;
+  }
+
+  /**
+   * Transfer SOL between two agents' wallets.
+   */
+  async agentToAgentTransfer(
+    fromAgentId: AgentId,
+    toAgentId: AgentId,
+    lamports: number,
+    memo?: string
+  ): Promise<ExecutionResult> {
+    const log = agentLogger(fromAgentId);
+    const toPublicKey = this.keyManager.getPublicKey(toAgentId);
+
+    const intent: TransactionIntent = {
+      agentId: fromAgentId,
+      type: TransactionType.TRANSFER_SOL,
+      description: `Agent transfer: ${formatSol(lamports)} to agent ${toAgentId}`,
+      params: {
+        type: 'TRANSFER_SOL',
+        recipient: toPublicKey,
+        lamports,
+      } as TransferSolParams,
+      timestamp: Date.now(),
+      confidence: 1.0,
+    };
+
+    log.info(`Agent-to-agent transfer: ${formatSol(lamports)} → ${toAgentId}`);
+    return this.executeTransaction(fromAgentId, intent, memo);
   }
 
   // ─── Private Methods ──────────────────────────────────────
@@ -293,6 +331,20 @@ export class WalletService {
       })
     );
     return tx;
+  }
+
+  /**
+   * Build a Memo Program instruction.
+   * Writes agent reasoning on-chain for permanent auditability.
+   */
+  private buildMemoInstruction(memo: string, signer: PublicKey): TransactionInstruction {
+    // Truncate to 566 bytes (Memo Program limit)
+    const memoBytes = Buffer.from(memo, 'utf-8').slice(0, 566);
+    return new TransactionInstruction({
+      keys: [{ pubkey: signer, isSigner: true, isWritable: false }],
+      programId: MEMO_PROGRAM_ID,
+      data: memoBytes,
+    });
   }
 
   private async getTokenAccounts(publicKey: PublicKey): Promise<TokenAccountInfo[]> {

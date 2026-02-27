@@ -49,6 +49,10 @@
 
 | Skill | Description | Input | Output |
 |-------|------------|-------|--------|
+| `create_agent_token` | Create new SPL token (agent = mint authority) | `agent_id, decimals` | `{ mint: PublicKey, signature }` |
+| `mint_agent_tokens` | Mint SPL tokens to agent's ATA | `agent_id, mint, amount` | `signature: string` |
+| `spl_transfer_between_agents` | Transfer SPL tokens between agent wallets | `fromAgent, toAgent, mint, amount` | `ExecutionResult` |
+| `get_agent_token_balance` | Query SPL token balance for a mint | `agent_id, mint` | `{ balance, decimals }` |
 | `agent_to_agent_transfer` | Transfer SOL between agent wallets | `fromAgent, toAgent, lamports` | `ExecutionResult` |
 | `get_performance` | Get agent P&L, win rate, fees | `agent_id` | `AgentPerformance` |
 | `get_explorer_links` | Solana Explorer links for all txs | `agent_id` | `string[]` |
@@ -129,6 +133,12 @@ agent.persistHistory();
 
 // Agent-to-agent transfer
 await walletService.agentToAgentTransfer(fromAgent, toAgent, lamports, 'memo');
+
+// SPL Token Protocol operations
+const { mint } = await walletService.createAgentToken(agentId, 6);
+await walletService.mintAgentTokens(agentId, mint, 1_000_000);
+await walletService.splTokenTransferBetweenAgents(fromAgent, toAgent, mint, amount);
+const balance = await walletService.getAgentTokenBalance(agentId, mint);
 
 // Emergency controls
 policyEngine.kill('anomaly detected');

@@ -237,7 +237,7 @@ Encrypted wallet file format:
 | Web dashboard | Read persisted history JSON from `./history/` |
 | Multi-chain | Abstract WalletService behind a chain interface |
 | Custom memos | Pass custom memo strings to `executeTransaction()` |
-| Agent economy | Use `agentToAgentTransfer()` for inter-agent cooperation |
+| Agent economy | Use `agentToAgentTransfer()` and `splTokenTransferBetweenAgents()` for inter-agent cooperation |
 | Anomaly detection | Trigger `kill()` from an ML monitoring pipeline |
 
 ---

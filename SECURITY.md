@@ -144,6 +144,9 @@ This prevents path traversal attacks like `../../etc/passwd` as an agent ID.
 | AES-256-GCM encryption | **Real** — actual encrypted files on disk |
 | Devnet transactions | **Real** — actual on-chain transactions with signatures |
 | SOL transfers | **Real** — real SOL moves between devnet accounts |
+| SPL token creation | **Real** — agents create token mints via **Token Program** |
+| SPL token minting | **Real** — agents mint supply to their own ATAs |
+| SPL token transfers | **Real** — agents distribute tokens via **Token Program** + **Associated Token Program** |
 | On-chain memos | **Real** — agent reasoning written permanently via Memo Program v2 |
 | Agent-to-agent transfers | **Real** — actual SOL moved between agent wallets on-chain |
 | Policy engine | **Real** — actual enforcement with all checks |

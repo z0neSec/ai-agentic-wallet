@@ -26,7 +26,7 @@ import {
 } from './agent';
 import { TransactionLog } from './types';
 import { formatSol, truncateKey, sleep } from './utils/helpers';
-import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 
 const BANNER = `
 ${chalk.cyan('╔══════════════════════════════════════════════════════════╗')}
@@ -190,7 +190,72 @@ async function main() {
   policyEngine.resume();
   console.log(chalk.green('  ✓ Kill switch deactivated — normal operation resumed\n'));
 
-  // ── 8. Performance Summary ──
+  // ── 8. SPL Token Protocol Interaction ──
+  console.log(chalk.bold('🪙 SPL Token Protocol Interaction (Multi-Agent Token Economy)\n'));
+  console.log(chalk.gray('  Real on-chain programs:\n'));
+  console.log(chalk.gray('    • Token Program:     TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'));
+  console.log(chalk.gray('    • Assoc. Token Prog: ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL\n'));
+
+  try {
+    // Step 1: AlphaTrader creates a governance token
+    console.log(chalk.cyan('  1. AlphaTrader creating SPL token mint...'));
+    const { mint } = await walletService.createAgentToken('multi-alpha-trader', 6);
+    console.log(chalk.green(`  ✓ Token created: ${mint.toBase58()}`));
+    console.log(chalk.gray(`    Explorer: https://explorer.solana.com/address/${mint.toBase58()}?cluster=devnet`));
+
+    await sleep(2000);
+
+    // Step 2: Mint supply
+    console.log(chalk.cyan('\n  2. Minting 10,000,000 tokens...'));
+    const mintSig = await walletService.mintAgentTokens('multi-alpha-trader', mint, 10_000_000 * 1e6);
+    console.log(chalk.green(`  ✓ Minted: ${truncateKey(mintSig)}`));
+
+    await sleep(2000);
+
+    // Step 3: Distribute to other agents via SPL transfer
+    console.log(chalk.magenta('\n  3. Distributing tokens to LiquidityBot...'));
+    const lp_transfer = await walletService.splTokenTransferBetweenAgents(
+      'multi-alpha-trader',
+      'multi-lp-bot',
+      mint,
+      2_000_000 * 1e6,
+      6,
+      '[TokenEconomy] AlphaTrader distributing tokens to LiquidityBot'
+    );
+    if (lp_transfer.success) {
+      console.log(chalk.green(`  ✓ Sent 2,000,000 tokens to LiquidityBot: ${truncateKey(lp_transfer.signature!)}`));
+    }
+
+    await sleep(2000);
+
+    console.log(chalk.yellow('\n  4. Distributing tokens to DCABot...'));
+    const dca_transfer = await walletService.splTokenTransferBetweenAgents(
+      'multi-alpha-trader',
+      'multi-dca-bot',
+      mint,
+      1_000_000 * 1e6,
+      6,
+      '[TokenEconomy] AlphaTrader distributing tokens to DCABot'
+    );
+    if (dca_transfer.success) {
+      console.log(chalk.green(`  ✓ Sent 1,000,000 tokens to DCABot: ${truncateKey(dca_transfer.signature!)}`));
+    }
+
+    await sleep(1000);
+
+    // Step 4: Show token balances
+    console.log(chalk.bold('\n  Token Balances:'));
+    for (let i = 0; i < agents.length; i++) {
+      const bal = await walletService.getAgentTokenBalance(agents[i].config.id, mint);
+      console.log(AGENT_COLORS[i](`    ${agents[i].config.name}: ${bal.balance.toLocaleString()} tokens`));
+    }
+
+    console.log(chalk.bold('\n  ✅ Real protocol interaction: Token Program + Associated Token Program\n'));
+  } catch (e: any) {
+    console.log(chalk.yellow(`\n  ⚠ SPL token section skipped: ${e.message}\n`));
+  }
+
+  // ── 9. Performance Summary ──
   console.log(chalk.gray('  ─────────────────────────────────────────\n'));
   console.log(chalk.bold('📋 Multi-Agent Performance Report:\n'));
 

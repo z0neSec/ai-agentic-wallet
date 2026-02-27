@@ -16,7 +16,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import chalk from 'chalk';
-import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { KeyManager, WalletService } from './wallet';
 import { PolicyEngine } from './policy';
 import { AgentManager, TradingBotStrategy } from './agent';
@@ -150,7 +150,40 @@ async function main() {
   // ── 5. Run Agent ──
   await agent.start(8); // Run 8 cycles
 
-  // ── 6. Performance Report ──
+  // ── 6. SPL Token Protocol Interaction ──
+  console.log(chalk.bold('\n🪙 SPL Token Protocol Interaction (Token Program + Associated Token Program)\n'));
+  console.log(chalk.gray('  Interacting with real Solana programs on devnet:\n'));
+  console.log(chalk.gray('    • Token Program:     TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'));
+  console.log(chalk.gray('    • Assoc. Token Prog: ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL\n'));
+
+  try {
+    // Step 1: Create a new SPL token
+    console.log(chalk.gray('  1. Creating SPL token mint (agent as mint authority)...'));
+    const { mint } = await walletService.createAgentToken(agent.config.id, 6);
+    console.log(chalk.green(`  ✓ Token created: ${mint.toBase58()}`));
+    console.log(chalk.gray(`    Explorer: https://explorer.solana.com/address/${mint.toBase58()}?cluster=devnet`));
+
+    await sleep(2000);
+
+    // Step 2: Mint tokens to self
+    console.log(chalk.gray('\n  2. Minting 1,000,000 tokens to agent wallet...'));
+    const mintSig = await walletService.mintAgentTokens(agent.config.id, mint, 1_000_000 * 1e6);
+    console.log(chalk.green(`  ✓ Minted 1,000,000 tokens: ${truncateKey(mintSig)}`));
+    console.log(chalk.gray(`    Explorer: https://explorer.solana.com/tx/${mintSig}?cluster=devnet`));
+
+    await sleep(2000);
+
+    // Step 3: Check token balance
+    const tokenBalance = await walletService.getAgentTokenBalance(agent.config.id, mint);
+    console.log(chalk.green(`\n  ✓ Agent token balance: ${tokenBalance.balance.toLocaleString()} tokens`));
+
+    console.log(chalk.bold('\n  ✅ Real protocol interaction confirmed — Token Program + Associated Token Program\n'));
+  } catch (e: any) {
+    console.log(chalk.yellow(`\n  ⚠ SPL token interaction skipped: ${e.message}`));
+    console.log(chalk.gray('    (This may happen if the wallet has insufficient SOL for rent)\n'));
+  }
+
+  // ── 7. Performance Report ──
   console.log(chalk.gray('\n  ─────────────────────────────────────────\n'));
   console.log(chalk.bold('📋 Agent Performance Report:\n'));
 
@@ -170,7 +203,7 @@ async function main() {
   console.log(`  Failed:       ${chalk.red(perf.totalFailed.toString())}`);
   console.log(`  Status:       ${agent.config.status}`);
 
-  // ── 7. Solana Explorer Links ──
+  // ── 8. Solana Explorer Links ──
   const links = agent.getExplorerLinks();
   if (links.length > 0) {
     console.log(chalk.bold('\n🔗 On-Chain Proof (Solana Explorer):\n'));
@@ -180,7 +213,7 @@ async function main() {
     console.log(chalk.gray('\n  Each transaction includes an on-chain memo with agent reasoning.'));
   }
 
-  // ── 8. Persist History ──
+  // ── 9. Persist History ──
   const historyFile = agent.persistHistory();
   console.log(chalk.gray(`\n  📁 Transaction history saved: ${historyFile}`));
 

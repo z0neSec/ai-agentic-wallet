@@ -20,8 +20,9 @@ Unlike traditional wallets that require human approval for every transaction, ag
 - **Autonomous Wallet Creation** — Agents programmatically generate and control their own keypairs
 - **AES-256-GCM Encrypted Key Storage** — Private keys never exist in plaintext on disk
 - **Policy Engine** — Spending limits, rate limits, confidence thresholds, program allowlists, and mandatory transaction simulation
+- **SPL Token Protocol Interaction** — Agents create tokens, mint supply, and transfer SPL tokens via **Token Program** + **Associated Token Program** — real dApp/protocol interaction on devnet
 - **On-Chain Audit Trail** — Agent reasoning written to Solana via Memo Program v2 — verifiable on-chain
-- **Agent-to-Agent Transfers** — Agents send funds to each other, creating an on-chain agent economy
+- **Agent-to-Agent Transfers** — Agents send SOL and SPL tokens to each other, creating an on-chain agent economy
 - **Emergency Kill Switch** — Global halt that instantly blocks all agent transactions
 - **Multi-Agent Isolation** — Each agent gets its own wallet, policy config, and audit trail
 - **Pluggable Strategies** — TradingBot, LiquidityProvider, DCA — or write your own
@@ -167,15 +168,20 @@ When you run `npm run demo`, you'll see:
    - Submits the decision to the Policy Engine (including confidence threshold check)
    - If approved, the transaction is simulated, signed, broadcast, **and annotated with an on-chain memo**
    - If denied (spending limit, rate limit, or low confidence), the reason is logged
-4. **Performance Report** — P&L, win rate, total fees, Solana Explorer links
-5. **History Persistence** — Full audit trail saved to `history/{agent-id}-history.json`
+4. **SPL Token Protocol Interaction** — The agent:
+   - Creates a new SPL token mint (via **Token Program**)
+   - Mints tokens to its own associated token account (via **Associated Token Program**)
+   - Checks token balance — real protocol interaction visible on Solana Explorer
+5. **Performance Report** — P&L, win rate, total fees, Solana Explorer links
+6. **History Persistence** — Full audit trail saved to `history/{agent-id}-history.json`
 
 Each transaction is a **real on-chain devnet transaction** with:
 - A verifiable signature on Solana Explorer
 - An **on-chain memo** containing the agent's reasoning (via Memo Program v2)
 
 The multi-agent demo (`npm run demo:multi`) additionally shows:
-- **Agent-to-agent transfers** — one agent sends funds to another
+- **Multi-agent SPL token economy** — one agent creates a token, mints supply, and distributes to other agents via SPL transfers
+- **Agent-to-agent SOL transfers** — one agent sends funds to another
 - **Emergency kill switch** — demonstrates global halt and resume
 
 ---
@@ -215,7 +221,7 @@ ai-agentic-wallet/
 │   │   └── index.ts
 │   ├── wallet/                 # Wallet infrastructure
 │   │   ├── key-manager.ts      # Encrypted key generation & storage
-│   │   ├── wallet-service.ts   # Signing, execution, simulation, Memo Program, agent transfers
+│   │   ├── wallet-service.ts   # Signing, execution, simulation, SPL token ops, Memo Program, agent transfers
 │   │   └── index.ts
 │   ├── policy/                 # Security policy engine
 │   │   ├── policy-engine.ts    # Kill switch, confidence, spending/rate limits, allowlists

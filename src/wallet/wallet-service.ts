@@ -13,6 +13,9 @@ import {
   createTransferInstruction,
   getOrCreateAssociatedTokenAccount,
   getAssociatedTokenAddress,
+  createMint,
+  mintTo,
+  getMint,
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
@@ -245,6 +248,144 @@ export class WalletService {
 
     log.info(`Agent-to-agent transfer: ${formatSol(lamports)} → ${toAgentId}`);
     return this.executeTransaction(fromAgentId, intent, memo);
+  }
+
+  // ─── SPL Token Protocol Interactions ──────────────────────
+
+  /**
+   * Create a new SPL token mint where the agent is the mint authority.
+   * This is a real on-chain interaction with the **Token Program**
+   * (TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA).
+   */
+  async createAgentToken(
+    agentId: AgentId,
+    decimals: number = 9
+  ): Promise<{ mint: PublicKey; signature: string }> {
+    const log = agentLogger(agentId);
+    log.info(`Creating SPL token mint (decimals=${decimals}) via Token Program`);
+
+    const keypair = await this.keyManager.loadKey(agentId);
+    try {
+      const mint = await createMint(
+        this.connection,
+        keypair,          // payer
+        keypair.publicKey, // mint authority
+        keypair.publicKey, // freeze authority
+        decimals
+      );
+
+      log.info(`SPL token created: ${mint.toBase58()}`);
+      this.keyManager.releaseKey(agentId);
+
+      return { mint, signature: mint.toBase58() };
+    } catch (error: any) {
+      this.keyManager.releaseKey(agentId);
+      throw new Error(`Failed to create token: ${error.message}`);
+    }
+  }
+
+  /**
+   * Mint tokens to an agent's associated token account.
+   * Interacts with the **Token Program** (mintTo instruction).
+   */
+  async mintAgentTokens(
+    agentId: AgentId,
+    mint: PublicKey,
+    amount: number
+  ): Promise<string> {
+    const log = agentLogger(agentId);
+    log.info(`Minting ${amount} tokens (mint: ${mint.toBase58().slice(0, 8)}...) via Token Program`);
+
+    const keypair = await this.keyManager.loadKey(agentId);
+    try {
+      // Get or create the agent's associated token account (ATA)
+      // This interacts with the **Associated Token Program**
+      const ata = await getOrCreateAssociatedTokenAccount(
+        this.connection,
+        keypair,          // payer
+        mint,
+        keypair.publicKey // owner
+      );
+
+      // Mint tokens — interacts with Token Program
+      const signature = await mintTo(
+        this.connection,
+        keypair,          // payer
+        mint,
+        ata.address,      // destination ATA
+        keypair.publicKey, // mint authority
+        amount
+      );
+
+      log.info(`Minted ${amount} tokens → ATA ${ata.address.toBase58().slice(0, 8)}... (sig: ${signature.slice(0, 12)}...)`);
+      this.keyManager.releaseKey(agentId);
+      return signature;
+    } catch (error: any) {
+      this.keyManager.releaseKey(agentId);
+      throw new Error(`Failed to mint tokens: ${error.message}`);
+    }
+  }
+
+  /**
+   * Transfer SPL tokens between two agents' wallets.
+   * Interacts with the **Token Program** (transfer) and
+   * **Associated Token Program** (getOrCreateAssociatedTokenAccount).
+   */
+  async splTokenTransferBetweenAgents(
+    fromAgentId: AgentId,
+    toAgentId: AgentId,
+    mint: PublicKey,
+    amount: number,
+    decimals: number = 9,
+    memo?: string
+  ): Promise<ExecutionResult> {
+    const log = agentLogger(fromAgentId);
+    const toPublicKey = new PublicKey(this.keyManager.getPublicKey(toAgentId));
+
+    log.info(`SPL transfer: ${amount} tokens → agent ${toAgentId} (mint: ${mint.toBase58().slice(0, 8)}...)`);
+
+    const intent: TransactionIntent = {
+      agentId: fromAgentId,
+      type: TransactionType.TRANSFER_SPL,
+      description: `SPL Token transfer: ${amount} tokens to agent ${toAgentId}`,
+      params: {
+        type: 'TRANSFER_SPL',
+        recipient: toPublicKey.toBase58(),
+        mint: mint.toBase58(),
+        amount,
+        decimals,
+      } as TransferSplParams,
+      timestamp: Date.now(),
+      confidence: 1.0,
+    };
+
+    return this.executeTransaction(fromAgentId, intent, memo);
+  }
+
+  /**
+   * Get token balance for a specific mint in an agent's wallet.
+   */
+  async getAgentTokenBalance(
+    agentId: AgentId,
+    mint: PublicKey
+  ): Promise<{ balance: number; decimals: number }> {
+    const publicKeyStr = this.keyManager.getPublicKey(agentId);
+    const publicKey = new PublicKey(publicKeyStr);
+    const ata = await getAssociatedTokenAddress(mint, publicKey);
+
+    try {
+      const accountInfo = await this.connection.getParsedAccountInfo(ata);
+      if (accountInfo.value) {
+        const data = (accountInfo.value.data as any).parsed.info;
+        return {
+          balance: data.tokenAmount.uiAmount || 0,
+          decimals: data.tokenAmount.decimals,
+        };
+      }
+    } catch {
+      // Account doesn't exist yet
+    }
+    return { balance: 0, decimals: 0 };
   }
 
   // ─── Private Methods ──────────────────────────────────────

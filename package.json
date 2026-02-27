@@ -9,6 +9,8 @@
     "dev": "ts-node src/index.ts",
     "demo": "ts-node src/demo.ts",
     "demo:multi": "ts-node src/demo-multi-agent.ts",
+    "demo:swarm": "ts-node src/demo-swarm.ts",
+    "dashboard": "ts-node src/dashboard.ts",
     "cli": "ts-node src/cli.ts",
     "test": "jest --forceExit --detectOpenHandles",
     "test:coverage": "jest --coverage --forceExit --detectOpenHandles",

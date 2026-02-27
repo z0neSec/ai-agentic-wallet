@@ -49,6 +49,8 @@
 
 | Skill | Description | Input | Output |
 |-------|------------|-------|--------|
+| `nlp_parse` | Parse natural language into TransactionIntent | `input: string, agentId` | `NLPResult` |
+| `swarm_propose` | Propose a transaction for swarm vote | `proposer, intent` | `ConsensusResult` |
 | `create_agent_token` | Create new SPL token (agent = mint authority) | `agent_id, decimals` | `{ mint: PublicKey, signature }` |
 | `mint_agent_tokens` | Mint SPL tokens to agent's ATA | `agent_id, mint, amount` | `signature: string` |
 | `spl_transfer_between_agents` | Transfer SPL tokens between agent wallets | `fromAgent, toAgent, mint, amount` | `ExecutionResult` |
@@ -58,6 +60,29 @@
 | `get_explorer_links` | Solana Explorer links for all txs | `agent_id` | `string[]` |
 | `persist_history` | Save audit trail to JSON file | `agent_id` | `filePath: string` |
 | `on_chain_memo` | Agent reasoning written to Solana | Automatic with every tx | Memo Program v2 |
+
+### Natural Language Pipeline
+
+| Command Pattern | Action | Example |
+|----------------|--------|---------|
+| `send X SOL to agent <name>` | SOL transfer | "send 0.01 SOL to agent AlphaTrader" |
+| `create token with X decimals` | Create SPL token | "create a token with 6 decimals" |
+| `mint X tokens` | Mint to agent ATA | "mint 1000000 tokens" |
+| `send X tokens to agent <name>` | SPL transfer | "transfer 500k tokens to agent LPBot" |
+| `check balance` | Query balance | "what's my balance" |
+| `airdrop X SOL` | Devnet airdrop | "airdrop 1 SOL" |
+
+Supports k/m/b suffixes (1k = 1,000, 1m = 1,000,000). Optionally enhanced by LLM (set OPENAI_API_KEY).
+
+### Swarm Consensus
+
+| Voter Perspective | Behavior | Typical Approval Threshold |
+|-------------------|----------|---------------------------|
+| `aggressive` (TradingBot) | Risk-tolerant, favors opportunity | Approves up to ~0.06 SOL |
+| `conservative` (LP) | Risk-averse, preserves capital | Approves up to ~0.015 SOL |
+| `systematic` (DCA) | Rules-based, favors consistency | Approves up to ~0.01 SOL |
+
+Consensus reasoning is recorded **on-chain via Memo Program** — verifiable on Solana Explorer.
 
 ### Agent Strategies (Pluggable)
 
@@ -139,6 +164,18 @@ const { mint } = await walletService.createAgentToken(agentId, 6);
 await walletService.mintAgentTokens(agentId, mint, 1_000_000);
 await walletService.splTokenTransferBetweenAgents(fromAgent, toAgent, mint, amount);
 const balance = await walletService.getAgentTokenBalance(agentId, mint);
+
+// Natural Language Pipeline
+const nlp = new NLPIntentParser();
+nlp.registerAgent('AlphaTrader', 'agent-1', publicKey);
+const result = await nlp.parse('send 0.01 SOL to agent AlphaTrader', agentId);
+// result.intent → ready for policy engine + execution
+
+// Swarm Consensus
+const consensus = new SwarmConsensus(0.6);
+consensus.registerVoter(agentId, 'AlphaTrader', 'aggressive');
+const vote = await consensus.propose(agentId, intent);
+// vote.approved, vote.votes[], vote.approvalRate
 
 // Emergency controls
 policyEngine.kill('anomaly detected');

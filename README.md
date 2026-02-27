@@ -4,7 +4,7 @@
 
 [![Solana](https://img.shields.io/badge/Solana-Devnet-blue)](https://solana.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org)
-[![Tests](https://img.shields.io/badge/Tests-34%20passing-green)](./src/__tests__)
+[![Tests](https://img.shields.io/badge/Tests-56%20passing-green)](./src/__tests__)
 [![License](https://img.shields.io/badge/License-MIT-green)](./LICENSE)
 
 ---
@@ -20,6 +20,9 @@ Unlike traditional wallets that require human approval for every transaction, ag
 - **Autonomous Wallet Creation** — Agents programmatically generate and control their own keypairs
 - **AES-256-GCM Encrypted Key Storage** — Private keys never exist in plaintext on disk
 - **Policy Engine** — Spending limits, rate limits, confidence thresholds, program allowlists, and mandatory transaction simulation
+- **Natural Language → On-Chain Pipeline** — Plain English commands become real Solana transactions — optionally enhanced by LLM (OpenAI)
+- **Multi-Agent Swarm Consensus** — Agents vote on high-value trades from their own strategic perspective — consensus recorded on-chain
+- **Live Terminal Dashboard** — Real-time visualization of agent balances, trades, and swarm votes
 - **SPL Token Protocol Interaction** — Agents create tokens, mint supply, and transfer SPL tokens via **Token Program** + **Associated Token Program** — real dApp/protocol interaction on devnet
 - **On-Chain Audit Trail** — Agent reasoning written to Solana via Memo Program v2 — verifiable on-chain
 - **Agent-to-Agent Transfers** — Agents send SOL and SPL tokens to each other, creating an on-chain agent economy
@@ -35,41 +38,47 @@ Unlike traditional wallets that require human approval for every transaction, ag
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     AI Agent Layer                       │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │
-│  │ TradingBot   │  │ LP Strategy │  │ DCA Strategy │     │
-│  │  Strategy    │  │             │  │              │     │
-│  └──────┬───────┘  └──────┬──────┘  └──────┬───────┘     │
-│         │                 │                │             │
-│         ▼                 ▼                ▼             │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │              Agent Runtime (Loop)                 │   │
-│  │   Query State → Decide → Validate → Execute      │   │
-│  └──────────────────────┬───────────────────────────┘   │
-├─────────────────────────┼───────────────────────────────┤
-│         Policy Layer    │                               │
-│  ┌──────────────────────▼───────────────────────────┐   │
-│  │              Policy Engine                        │   │
-│  │  • Spending Limits    • Rate Limits               │   │
-│  │  • Program Allowlist  • Tx Simulation             │   │
-│  │  • Type Permissions   • Cooldown Enforcement      │   │
-│  └──────────────────────┬───────────────────────────┘   │
-├─────────────────────────┼───────────────────────────────┤
-│         Wallet Layer    │                               │
-│  ┌──────────────────────▼───────────────────────────┐   │
-│  │   ┌─────────────┐    ┌──────────────────────┐    │   │
-│  │   │ Key Manager  │    │   Wallet Service     │    │   │
-│  │   │ AES-256-GCM  │    │   Sign & Execute     │    │   │
-│  │   │ Encrypted    │◄──►│   Simulate & Query   │    │   │
-│  │   └─────────────┘    └──────────┬───────────┘    │   │
-│  └─────────────────────────────────┼────────────────┘   │
-├─────────────────────────────────────┼───────────────────┤
-│                                     ▼                   │
-│              ┌──────────────────────────────┐           │
-│              │     Solana Devnet (RPC)      │           │
-│              └──────────────────────────────┘           │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                   Natural Language Interface                 │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │  NLP Intent Parser              (+ optional LLM)      │  │
+│  │  "send 0.5 SOL to agent Bob" → TransactionIntent      │  │
+│  └──────────────────────┬─────────────────────────────────┘  │
+├─────────────────────────┼───────────────────────────────────┤
+│                AI Agent Layer                                │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
+│  │ TradingBot   │  │ LP Strategy │  │ DCA Strategy │          │
+│  └──────┬───────┘  └──────┬──────┘  └──────┬───────┘          │
+│         └─────────────────┼────────────────┘                 │
+│                           ▼                                  │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │  Swarm Consensus Engine (Multi-Agent Voting)           │  │
+│  │  Each agent votes from its strategic perspective       │  │
+│  │  Quorum-based approval → on-chain memo recording       │  │
+│  └──────────────────────┬─────────────────────────────────┘  │
+│                         ▼                                    │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │  Agent Runtime (Autonomous Loop)                       │  │
+│  │  Query State → Decide → Validate → Execute             │  │
+│  └──────────────────────┬─────────────────────────────────┘  │
+├─────────────────────────┼───────────────────────────────────┤
+│         Policy Layer    │                                    │
+│  ┌──────────────────────▼─────────────────────────────────┐  │
+│  │  Policy Engine                                         │  │
+│  │  Kill Switch · Confidence · Spending · Rate · Allowlist│  │
+│  └──────────────────────┬─────────────────────────────────┘  │
+├─────────────────────────┼───────────────────────────────────┤
+│         Wallet Layer    │                                    │
+│  ┌──────────────────────▼─────────────────────────────────┐  │
+│  │  Key Manager (AES-256-GCM) ◄──► Wallet Service         │  │
+│  │  Encrypted storage            Sign · Execute · SPL Ops │  │
+│  └──────────────────────┬─────────────────────────────────┘  │
+├─────────────────────────┼───────────────────────────────────┤
+│                         ▼                                    │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │  Solana Devnet — System · Token · Memo Programs        │  │
+│  └────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 Each layer has a single responsibility:
@@ -123,6 +132,12 @@ npm run demo
 
 # Multiple agents with different strategies
 npm run demo:multi
+
+# Swarm intelligence: NLP pipeline + multi-agent consensus
+npm run demo:swarm
+
+# Live real-time dashboard
+npm run dashboard
 ```
 
 ### CLI Interface
@@ -184,6 +199,14 @@ The multi-agent demo (`npm run demo:multi`) additionally shows:
 - **Agent-to-agent SOL transfers** — one agent sends funds to another
 - **Emergency kill switch** — demonstrates global halt and resume
 
+The swarm intelligence demo (`npm run demo:swarm`) showcases:
+- **Natural Language → On-Chain Pipeline** — plain English commands parsed into real Solana transactions
+- **Multi-Agent Consensus** — 3 agents vote on proposed trades, consensus reasoning recorded on-chain
+
+The live dashboard (`npm run dashboard`) provides:
+- **Real-time agent monitoring** — balances, stats, activity feed updating live in the terminal
+- **Swarm consensus visualization** — watch agents vote in real-time
+
 ---
 
 ## Security Deep Dive
@@ -218,6 +241,8 @@ ai-agentic-wallet/
 │   ├── agent/                  # AI agent logic
 │   │   ├── agent-runtime.ts    # Autonomous loop + multi-agent manager + performance tracking
 │   │   ├── strategies.ts       # Pluggable trading strategies
+│   │   ├── nlp-intent-parser.ts # Natural Language → TransactionIntent pipeline
+│   │   ├── swarm-consensus.ts  # Multi-agent voting protocol
 │   │   └── index.ts
 │   ├── wallet/                 # Wallet infrastructure
 │   │   ├── key-manager.ts      # Encrypted key generation & storage
@@ -231,12 +256,15 @@ ai-agentic-wallet/
 │   ├── utils/                  # Shared utilities
 │   │   ├── helpers.ts
 │   │   └── logger.ts
-│   ├── __tests__/              # Test suite (34 tests)
+│   ├── __tests__/              # Test suite (56 tests)
 │   │   ├── key-manager.test.ts
 │   │   ├── policy-engine.test.ts
-│   │   └── strategies.test.ts
+│   │   ├── strategies.test.ts
+│   │   └── swarm-nlp.test.ts
 │   ├── demo.ts                 # Single agent demo
 │   ├── demo-multi-agent.ts     # Multi-agent demo with agent transfers + kill switch
+│   ├── demo-swarm.ts           # Swarm intelligence: NLP + consensus demo
+│   ├── dashboard.ts            # Live real-time terminal dashboard
 │   ├── cli.ts                  # CLI interface
 │   └── index.ts                # Library exports
 ├── scripts/

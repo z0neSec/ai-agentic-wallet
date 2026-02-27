@@ -194,3 +194,54 @@ export interface AgentTransferParams {
   targetAgentId: AgentId;
   lamports: number;
 }
+
+// ============================================================
+// Swarm Consensus Types
+// ============================================================
+
+/** Vote from a single agent in a swarm consensus round */
+export interface SwarmVote {
+  agentId: AgentId;
+  agentName: string;
+  approved: boolean;
+  confidence: number;
+  reasoning: string;
+  timestamp: number;
+}
+
+/** Result of a swarm consensus vote */
+export interface ConsensusResult {
+  proposer: AgentId;
+  intent: TransactionIntent;
+  votes: SwarmVote[];
+  approved: boolean;
+  quorum: number;
+  approvalRate: number;
+  timestamp: number;
+}
+
+// ============================================================
+// NLP Intent Parsing Types
+// ============================================================
+
+/** Result from NLP intent parsing */
+export interface NLPResult {
+  type: 'transfer_sol' | 'transfer_spl' | 'create_token' | 'mint_tokens' | 'airdrop' | 'balance' | 'unknown';
+  intent?: TransactionIntent;
+  action?: string;
+  message: string;
+  parsed: Record<string, any>;
+}
+
+// ============================================================
+// Dashboard Types
+// ============================================================
+
+/** Dashboard activity event for real-time display */
+export interface DashboardEvent {
+  type: 'transaction' | 'consensus' | 'nlp' | 'system';
+  agentName?: string;
+  message: string;
+  status: 'success' | 'denied' | 'failed' | 'info';
+  timestamp: number;
+}

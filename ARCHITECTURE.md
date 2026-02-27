@@ -231,6 +231,8 @@ Encrypted wallet file format:
 | Extension | How |
 |-----------|-----|
 | New strategy | Implement `AgentStrategy` interface |
+| NLP Pipeline | Feed natural language to `NLPIntentParser` for plain-English transaction control |
+| Swarm Consensus | Use `SwarmConsensus` for multi-agent voting before high-value trades |
 | DEX integration | Replace `buildSimulatedSwap` in WalletService |
 | On-chain policy | Deploy a Solana program, add PDA vault layer |
 | External AI | Strategy calls an LLM API for decisions |

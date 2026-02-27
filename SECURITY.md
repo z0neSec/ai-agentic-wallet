@@ -188,7 +188,7 @@ For moving beyond devnet, these additional measures would be needed:
 
 ## Test Coverage
 
-Security properties are validated by 34 automated tests:
+Security properties are validated by 56 automated tests:
 
 - **Key encryption/decryption** — Verify round-trip correctness
 - **No plaintext leakage** — Verify encrypted files don't contain raw keys
@@ -203,6 +203,17 @@ Security properties are validated by 34 automated tests:
 - **Confidence threshold** — Verify low-confidence trades are rejected
 - **Confidence passthrough** — Verify high-confidence trades are approved
 - **No threshold fallback** — Verify any confidence allowed when not configured
+- **NLP SOL transfer parsing** — Verify natural language commands produce correct intents
+- **NLP token creation** — Verify "create token" commands set correct decimals
+- **NLP mint parsing** — Verify token amount parsing with k/m/b suffixes
+- **NLP balance/airdrop** — Verify query commands parse correctly
+- **NLP unknown fallback** — Verify unparseable input returns 'unknown' type
+- **Swarm vote count** — Verify all registered voters produce votes
+- **Swarm quorum math** — Verify approval rate calculation and quorum enforcement
+- **Swarm reasoning** — Verify each vote includes reasoning and confidence
+- **Swarm conservative rejection** — Verify conservative voters reject large trades
+- **Swarm memo generation** — Verify consensus memo includes all vote data
+- **Swarm custom quorum** — Verify configurable quorum thresholds work
 
 ---
 

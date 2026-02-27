@@ -211,7 +211,9 @@ The live dashboard (`npm run dashboard`) provides:
 
 ## Security Deep Dive
 
-See [SECURITY.md](./SECURITY.md) for the complete security analysis.
+See [DEEP_DIVE.md](./DEEP_DIVE.md) for the full narrative — wallet design, security model, NLP pipeline, swarm consensus, and how it all fits together for autonomous AI agents.
+
+See also [SECURITY.md](./SECURITY.md) for the threat model and defense-in-depth analysis.
 
 ### Summary of Protections
 

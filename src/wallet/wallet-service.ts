@@ -5,7 +5,6 @@ import {
   SystemProgram,
   Transaction,
   TransactionInstruction,
-  SendOptions,
   LAMPORTS_PER_SOL,
   sendAndConfirmTransaction,
 } from '@solana/web3.js';

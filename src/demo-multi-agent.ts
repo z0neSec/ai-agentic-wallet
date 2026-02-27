@@ -26,7 +26,7 @@ import {
 } from './agent';
 import { TransactionLog } from './types';
 import { formatSol, truncateKey, sleep } from './utils/helpers';
-import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
+import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 
 const BANNER = `
 ${chalk.cyan('╔══════════════════════════════════════════════════════════╗')}

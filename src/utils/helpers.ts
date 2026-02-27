@@ -4,9 +4,10 @@ import { AgentPolicy } from '../types';
 /** Default conservative policy for new agents */
 export function defaultPolicy(): AgentPolicy {
   const maxTxSol = parseFloat(process.env.DEFAULT_SPENDING_LIMIT_SOL || '1.0');
+  const hourlyMultiplier = parseFloat(process.env.DEFAULT_HOURLY_MULTIPLIER || '5');
   return {
     maxTransactionLamports: maxTxSol * LAMPORTS_PER_SOL,
-    maxHourlySpendLamports: maxTxSol * 5 * LAMPORTS_PER_SOL,
+    maxHourlySpendLamports: maxTxSol * hourlyMultiplier * LAMPORTS_PER_SOL,
     txCooldownMs: parseInt(process.env.DEFAULT_TX_COOLDOWN_MS || '5000', 10),
     maxTxPerHour: parseInt(process.env.DEFAULT_MAX_TX_PER_HOUR || '20', 10),
     allowlistedPrograms: [
@@ -54,4 +55,12 @@ export function truncateKey(key: string): string {
 /** Sleep for ms */
 export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** Derive Solana Explorer cluster param from RPC URL */
+export function getExplorerCluster(): string {
+  const rpc = getRpcUrl();
+  if (rpc.includes('mainnet')) return '';
+  if (rpc.includes('testnet')) return '?cluster=testnet';
+  return '?cluster=devnet';
 }

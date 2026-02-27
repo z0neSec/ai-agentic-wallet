@@ -108,7 +108,7 @@ describe('SwarmConsensus', () => {
   let consensus: SwarmConsensus;
 
   beforeEach(() => {
-    consensus = new SwarmConsensus(0.6); // 60% quorum
+    consensus = new SwarmConsensus({ quorum: 0.6 }); // 60% quorum
     consensus.registerVoter('agent-alpha', 'AlphaTrader', 'aggressive');
     consensus.registerVoter('agent-lp', 'LiquidityBot', 'conservative');
     consensus.registerVoter('agent-dca', 'DCABot', 'systematic');
@@ -204,7 +204,7 @@ describe('SwarmConsensus', () => {
   });
 
   it('should respect custom quorum', async () => {
-    const strictConsensus = new SwarmConsensus(1.0); // 100% quorum — must be unanimous
+    const strictConsensus = new SwarmConsensus({ quorum: 1.0 }); // 100% quorum — must be unanimous
     strictConsensus.registerVoter('a', 'Agent A', 'aggressive');
     strictConsensus.registerVoter('b', 'Agent B', 'conservative');
 

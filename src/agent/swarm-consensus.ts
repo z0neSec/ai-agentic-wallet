@@ -33,17 +33,31 @@ interface SwarmVoter {
   perspective: VoterPerspective;
 }
 
+export interface SwarmConfig {
+  /** Fraction of approvals needed (default 0.6 = 60%) */
+  quorum?: number;
+  /** SOL threshold for aggressive voter (default 0.02) */
+  aggressiveRiskTolerance?: number;
+  /** SOL threshold for conservative voter (default 0.015) */
+  conservativeThreshold?: number;
+  /** SOL baseline for systematic voter (default 0.005) */
+  systematicNorm?: number;
+}
+
 export class SwarmConsensus {
   private voters: SwarmVoter[] = [];
   private quorum: number;
+  private aggressiveRiskTolerance: number;
+  private conservativeThreshold: number;
+  private systematicNorm: number;
   private onVoteCallbacks: Array<(vote: SwarmVote) => void> = [];
   private onResultCallbacks: Array<(result: ConsensusResult) => void> = [];
 
-  /**
-   * @param quorum Fraction of approvals needed (default 0.6 = 60%)
-   */
-  constructor(quorum: number = 0.6) {
-    this.quorum = quorum;
+  constructor(config: SwarmConfig = {}) {
+    this.quorum = config.quorum ?? 0.6;
+    this.aggressiveRiskTolerance = config.aggressiveRiskTolerance ?? 0.02;
+    this.conservativeThreshold = config.conservativeThreshold ?? 0.015;
+    this.systematicNorm = config.systematicNorm ?? 0.005;
   }
 
   /**
@@ -121,8 +135,7 @@ export class SwarmConsensus {
   // ─── Vote Evaluation ──────────────────────────────────────
 
   private evaluateVote(voter: SwarmVoter, intent: TransactionIntent): SwarmVote {
-    const amount = this.getIntentAmount(intent);
-    const amountSol = lamportsToSol(amount);
+    const amountSol = this.getIntentAmountInSol(intent);
 
     switch (voter.perspective) {
       case 'aggressive':
@@ -141,7 +154,7 @@ export class SwarmConsensus {
    */
   private evaluateAggressive(voter: SwarmVoter, amountSol: number): SwarmVote {
     const marketSentiment = 0.4 + Math.random() * 0.4; // 0.4–0.8
-    const riskTolerance = 0.02;
+    const riskTolerance = this.aggressiveRiskTolerance;
     const sizeOk = amountSol <= riskTolerance;
     const sentimentOk = marketSentiment > 0.45;
     const approved = sizeOk || (amountSol <= riskTolerance * 3 && sentimentOk);
@@ -166,7 +179,7 @@ export class SwarmConsensus {
    * Prioritizes capital preservation, low risk tolerance.
    */
   private evaluateConservative(voter: SwarmVoter, amountSol: number): SwarmVote {
-    const liquidityThreshold = 0.015;
+    const liquidityThreshold = this.conservativeThreshold;
     const approved = amountSol <= liquidityThreshold;
     const confidence = approved ? 0.7 : 0.3;
 
@@ -189,7 +202,7 @@ export class SwarmConsensus {
    * Evaluates consistency with rule-based strategies.
    */
   private evaluateSystematic(voter: SwarmVoter, amountSol: number): SwarmVote {
-    const dcaNorm = 0.005;
+    const dcaNorm = this.systematicNorm;
     const isConsistent = amountSol <= dcaNorm * 2;
     const approved = isConsistent;
     const confidence = isConsistent ? 0.8 : 0.35;
@@ -210,12 +223,19 @@ export class SwarmConsensus {
 
   // ─── Helpers ──────────────────────────────────────
 
-  private getIntentAmount(intent: TransactionIntent): number {
+  /**
+   * Get intent amount normalized to SOL.
+   * SOL transfers: convert lamports → SOL.
+   * SPL transfers: convert raw amount using token decimals → human units (treated as SOL-equivalent).
+   */
+  private getIntentAmountInSol(intent: TransactionIntent): number {
     switch (intent.params.type) {
       case 'TRANSFER_SOL':
-        return (intent.params as TransferSolParams).lamports;
-      case 'TRANSFER_SPL':
-        return (intent.params as TransferSplParams).amount;
+        return lamportsToSol((intent.params as TransferSolParams).lamports);
+      case 'TRANSFER_SPL': {
+        const splParams = intent.params as TransferSplParams;
+        return splParams.amount / Math.pow(10, splParams.decimals);
+      }
       default:
         return 0;
     }

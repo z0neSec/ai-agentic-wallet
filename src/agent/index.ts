@@ -6,4 +6,4 @@ export {
   DCAStrategy,
 } from './strategies';
 export { NLPIntentParser } from './nlp-intent-parser';
-export { SwarmConsensus } from './swarm-consensus';
+export { SwarmConsensus, SwarmConfig } from './swarm-consensus';

@@ -172,8 +172,9 @@ async function main() {
 
       case 'create_token': {
         try {
-          const { mint } = await walletService.createAgentToken('swarm-alpha', result.parsed.decimals || 6);
-          nlp.setCurrentMint(mint.toBase58());
+          const decimals = result.parsed.decimals || 6;
+          const { mint } = await walletService.createAgentToken('swarm-alpha', decimals);
+          nlp.setCurrentMint(mint.toBase58(), decimals);
           console.log(chalk.green(`     ✓ Token created: ${mint.toBase58()}`));
           console.log(chalk.gray(`       Explorer: https://explorer.solana.com/address/${mint.toBase58()}?cluster=devnet`));
           await sleep(2000);
@@ -191,7 +192,8 @@ async function main() {
         }
         try {
           const mint = new PublicKey(mintAddress);
-          const rawAmount = result.parsed.amount * 1e6;
+          const decimals = nlp.getCurrentDecimals();
+          const rawAmount = result.parsed.amount * Math.pow(10, decimals);
           const sig = await walletService.mintAgentTokens('swarm-alpha', mint, rawAmount);
           console.log(chalk.green(`     ✓ Minted ${result.parsed.amount.toLocaleString()} tokens: ${truncateKey(sig)}`));
           console.log(chalk.gray(`       Explorer: https://explorer.solana.com/tx/${sig}?cluster=devnet`));
@@ -260,7 +262,7 @@ async function main() {
   console.log(chalk.gray('  3 agents vote on proposed trades. Each evaluates from'));
   console.log(chalk.gray('  their own strategic perspective. 2/3 majority = quorum.\n'));
 
-  const consensus = new SwarmConsensus(0.6);
+  const consensus = new SwarmConsensus({ quorum: 0.6 });
   consensus.registerVoter('swarm-alpha', 'AlphaTrader', 'aggressive');
   consensus.registerVoter('swarm-lp', 'LiquidityBot', 'conservative');
   consensus.registerVoter('swarm-dca', 'DCABot', 'systematic');

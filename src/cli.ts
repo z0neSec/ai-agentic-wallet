@@ -18,7 +18,7 @@ import {
   LiquidityProviderStrategy,
   DCAStrategy,
 } from './agent';
-import { formatSol, truncateKey, lamportsToSol } from './utils/helpers';
+import { formatSol, truncateKey } from './utils/helpers';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 
 const program = new Command();

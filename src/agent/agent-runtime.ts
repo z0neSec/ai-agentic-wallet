@@ -12,7 +12,7 @@ import { WalletService } from '../wallet/wallet-service';
 import { PolicyEngine } from '../policy/policy-engine';
 import { AgentStrategy } from './strategies';
 import { logger, agentLogger } from '../utils/logger';
-import { defaultPolicy, sleep, formatSol } from '../utils/helpers';
+import { defaultPolicy, sleep, formatSol, getExplorerCluster } from '../utils/helpers';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
@@ -172,9 +172,10 @@ export class AgentRuntime {
    * Generate Solana Explorer links for all executed transactions.
    */
   getExplorerLinks(): string[] {
+    const cluster = getExplorerCluster();
     return this.transactionLog
       .filter(l => l.executionResult?.signature)
-      .map(l => `https://explorer.solana.com/tx/${l.executionResult!.signature}?cluster=devnet`);
+      .map(l => `https://explorer.solana.com/tx/${l.executionResult!.signature}${cluster}`);
   }
 
   /**

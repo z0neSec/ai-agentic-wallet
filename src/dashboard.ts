@@ -292,7 +292,7 @@ async function main() {
   }
 
   // ── Setup Consensus ──
-  const consensus = new SwarmConsensus(0.6);
+  const consensus = new SwarmConsensus({ quorum: 0.6 });
   consensus.registerVoter('dash-alpha', 'AlphaTrader', 'aggressive');
   consensus.registerVoter('dash-lp', 'LiquidityBot', 'conservative');
   consensus.registerVoter('dash-dca', 'DCABot', 'systematic');

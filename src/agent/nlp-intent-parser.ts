@@ -36,6 +36,7 @@ interface AgentEntry {
 export class NLPIntentParser {
   private agents: Map<string, AgentEntry> = new Map();
   private currentMint?: string;
+  private currentDecimals: number = 6;
 
   /**
    * Register an agent so NLP can resolve names like "agent AlphaTrader".
@@ -46,14 +47,19 @@ export class NLPIntentParser {
   }
 
   /**
-   * Set current token mint for contextual operations (mint/transfer).
+   * Set current token mint and its decimals for contextual operations (mint/transfer).
    */
-  setCurrentMint(mint: string): void {
+  setCurrentMint(mint: string, decimals: number = 6): void {
     this.currentMint = mint;
+    this.currentDecimals = decimals;
   }
 
   getCurrentMint(): string | undefined {
     return this.currentMint;
+  }
+
+  getCurrentDecimals(): number {
+    return this.currentDecimals;
   }
 
   /**
@@ -78,8 +84,9 @@ export class NLPIntentParser {
       try {
         const llmResult = await this.parseLLM(input.trim(), agentId);
         if (llmResult) return llmResult;
-      } catch {
-        // Fall through
+      } catch (err: any) {
+        // LLM fallback failed — continue to unknown result
+        console.warn(`[NLP] LLM fallback failed: ${err.message}`);
       }
     }
 
@@ -186,8 +193,8 @@ export class NLPIntentParser {
           type: 'TRANSFER_SPL',
           recipient: resolved.publicKey,
           mint: this.currentMint,
-          amount: amount * 1e6, // 6-decimal raw units
-          decimals: 6,
+          amount: amount * Math.pow(10, this.currentDecimals),
+          decimals: this.currentDecimals,
         } as TransferSplParams,
         timestamp: Date.now(),
         confidence: 0.9,
@@ -266,6 +273,7 @@ export class NLPIntentParser {
       'Respond ONLY with valid JSON. If unparseable: { "type": "unknown" }',
     ].join('\n');
 
+    const model = process.env.LLM_MODEL || 'gpt-4o-mini';
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -273,7 +281,7 @@ export class NLPIntentParser {
         'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: input },
@@ -282,6 +290,10 @@ export class NLPIntentParser {
         max_tokens: 200,
       }),
     });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+    }
 
     const data: any = await response.json();
     const content = data.choices?.[0]?.message?.content;
@@ -335,8 +347,8 @@ export class NLPIntentParser {
               type: 'TRANSFER_SPL',
               recipient: resolved.publicKey,
               mint: this.currentMint,
-              amount: parsed.amount * 1e6,
-              decimals: 6,
+              amount: parsed.amount * Math.pow(10, this.currentDecimals),
+              decimals: this.currentDecimals,
             } as TransferSplParams,
             timestamp: Date.now(),
             confidence: 0.85,

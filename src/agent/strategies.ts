@@ -1,19 +1,15 @@
-import { Keypair, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import {
   AgentId,
   AgentConfig,
-  AgentStatus,
   AgentDecision,
   TransactionIntent,
   TransactionType,
   TransferSolParams,
   WalletInfo,
 } from '../types';
-import { WalletService } from '../wallet/wallet-service';
-import { PolicyEngine } from '../policy/policy-engine';
-import { logger, agentLogger } from '../utils/logger';
-import { defaultPolicy, formatSol, lamportsToSol, sleep } from '../utils/helpers';
-import { v4 as uuidv4 } from 'uuid';
+import { agentLogger } from '../utils/logger';
+import { lamportsToSol } from '../utils/helpers';
 
 /**
  * Strategy — Defines the autonomous behavior of an agent.
@@ -49,7 +45,6 @@ export class TradingBotStrategy implements AgentStrategy {
   name = 'TradingBot';
   description = 'Autonomous trading bot that executes simulated trades on devnet';
 
-  private tradeTargets: string[] = [];
   private marketSentiment: number = 0.5; // 0 = bearish, 1 = bullish
 
   async decide(walletInfo: WalletInfo, context: StrategyContext): Promise<AgentDecision | null> {
@@ -125,9 +120,6 @@ export class TradingBotStrategy implements AgentStrategy {
 export class LiquidityProviderStrategy implements AgentStrategy {
   name = 'LiquidityProvider';
   description = 'Autonomous liquidity provider that distributes funds across pools';
-
-  private poolAddresses: string[] = [];
-  private rebalanceThreshold = 0.7;
 
   async decide(walletInfo: WalletInfo, context: StrategyContext): Promise<AgentDecision | null> {
     const log = agentLogger(context.agentId);
